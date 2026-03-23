@@ -22,8 +22,14 @@ sudo tc qdisc del dev $intf root 2>/dev/null || true
 sudo tc qdisc add dev $intf root handle 1: htb default 20
 
 # create classes: 10 for high-priority, 20 for best-effort
-sudo tc class add dev $intf parent 1: classid 1:10 htb rate 5mbit ceil 5mbit
-sudo tc class add dev $intf parent 1: classid 1:20 htb rate 1mbit ceil 5mbit
+# rates/ceilings can be overridden via environment variables
+hp_rate=${SDNV_HP_RATE:-10mbit}
+hp_ceil=${SDNV_HP_CEIL:-20mbit}
+be_rate=${SDNV_BE_RATE:-20mbit}
+be_ceil=${SDNV_BE_CEIL:-80mbit}
+
+sudo tc class add dev $intf parent 1: classid 1:10 htb rate $hp_rate ceil $hp_ceil
+sudo tc class add dev $intf parent 1: classid 1:20 htb rate $be_rate ceil $be_ceil
 
 # add filter for emergency UDP
 sudo tc filter add dev $intf protocol ip parent 1:0 prio 1 u32 \
@@ -34,3 +40,4 @@ sudo tc filter add dev $intf protocol ip parent 1:0 prio 1 u32 \
 # best-effort (all other traffic) uses default class
 
 echo "[sdnv_policy] HTB qdisc configured with priority for UDP/5001."
+echo "[sdnv_policy] HP rate/ceil: $hp_rate/$hp_ceil, BE rate/ceil: $be_rate/$be_ceil"

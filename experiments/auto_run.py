@@ -47,18 +47,21 @@ def _stop_controller(proc, log_file):
 def main():
     parser = argparse.ArgumentParser(description='Automated SDNV experiment runner')
     parser.add_argument('--scenario', choices=['baseline', 'sdnv'], default='baseline')
+    parser.add_argument('--results-tag', default=None,
+                        help='Optional tag for results/logs (defaults to scenario)')
     parser.add_argument('--duration', type=int, default=60,
                         help='iperf duration in seconds for traffic flows')
     parser.add_argument('--ryu-ip', default='127.0.0.1')
     parser.add_argument('--ryu-port', type=int, default=6653)
     args = parser.parse_args()
 
+    results_tag = args.results_tag or args.scenario
     os.makedirs('logs', exist_ok=True)
-    os.makedirs(f"results/{args.scenario}", exist_ok=True)
+    os.makedirs(f"results/{results_tag}", exist_ok=True)
     timestamp = int(time.time())
 
     info('*** starting controller\n')
-    ctrl_log = f"logs/controller_{args.scenario}_{timestamp}.log"
+    ctrl_log = f"logs/controller_{results_tag}_{timestamp}.log"
     ctrl_proc, ctrl_log_file = _start_controller(ctrl_log, args.ryu_ip, args.ryu_port)
     time.sleep(2)
 
@@ -91,12 +94,12 @@ def main():
         udp_srv, udp_log = popen_in_node(
             h1,
             "iperf -s -u -p 5001",
-            f"logs/iperf_udp_server_{args.scenario}_{timestamp}.log",
+            f"logs/iperf_udp_server_{results_tag}_{timestamp}.log",
         )
         tcp_srv, tcp_log = popen_in_node(
             h1,
             "iperf -s -p 5002",
-            f"logs/iperf_tcp_server_{args.scenario}_{timestamp}.log",
+            f"logs/iperf_tcp_server_{results_tag}_{timestamp}.log",
         )
         time.sleep(1)
 
@@ -104,7 +107,7 @@ def main():
         ping_proc, ping_log = popen_in_node(
             sta1,
             "ping -c 3 10.0.0.100",
-            f"logs/ping_{args.scenario}_{timestamp}.log",
+            f"logs/ping_{results_tag}_{timestamp}.log",
         )
         ping_proc.wait()
         if ping_log:
@@ -112,8 +115,15 @@ def main():
 
         if args.scenario == 'sdnv':
             info('*** applying SDNV policy on sta1\n')
+            policy_log = f"logs/policy_timing_{results_tag}_{timestamp}.log"
+            policy_start = time.time()
             proc, logf = popen_in_node(sta1, 'bash vehicle/sdnv_policy.sh')
             proc.wait()
+            policy_end = time.time()
+            with open(policy_log, 'w') as f:
+                f.write(f"policy_start_epoch={policy_start:.6f}\n")
+                f.write(f"policy_end_epoch={policy_end:.6f}\n")
+                f.write(f"policy_reaction_s={policy_end - policy_start:.6f}\n")
         else:
             info('*** applying baseline policy on sta1\n')
             proc, logf = popen_in_node(sta1, 'bash vehicle/baseline_policy.sh')
@@ -124,17 +134,17 @@ def main():
             popen_in_node(
                 sta,
                 f"iperf -c 10.0.0.100 -p 5002 -t {args.duration} -i 5",
-                f"logs/{sta.name}_congestion_{args.scenario}_{timestamp}.log",
+                f"logs/{sta.name}_congestion_{results_tag}_{timestamp}.log",
             )
 
         info('*** measuring latency, jitter, and throughput from sta1\n')
         for cmd, log_name in (
-            (f"bash measurements/latency.sh 10.0.0.100 {args.scenario}",
-             f"logs/latency_run_{args.scenario}_{timestamp}.log"),
-            (f"bash measurements/jitter.sh 10.0.0.100 {args.scenario}",
-             f"logs/jitter_run_{args.scenario}_{timestamp}.log"),
-            (f"bash measurements/throughput.sh 10.0.0.100 {args.scenario}",
-             f"logs/throughput_run_{args.scenario}_{timestamp}.log"),
+            (f"bash measurements/latency.sh 10.0.0.100 {results_tag}",
+             f"logs/latency_run_{results_tag}_{timestamp}.log"),
+            (f"bash measurements/jitter.sh 10.0.0.100 {results_tag}",
+             f"logs/jitter_run_{results_tag}_{timestamp}.log"),
+            (f"bash measurements/throughput.sh 10.0.0.100 {results_tag}",
+             f"logs/throughput_run_{results_tag}_{timestamp}.log"),
         ):
             proc, logf = popen_in_node(sta1, cmd, log_name)
             proc.wait()

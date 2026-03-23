@@ -8,6 +8,7 @@ if [ "$#" -lt 1 ]; then
 fi
 
 dst=$1
+rate=${EMERGENCY_RATE:-10m}
 
 echo "Starting emergency UDP flow to $dst:5001"
-iperf -u -c $dst -p 5001 -b 1m -t 60 -i 5
+iperf -u -c $dst -p 5001 -b $rate -t 60 -i 5
