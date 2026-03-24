@@ -1,0 +1,14 @@
+[baseline]
+jitter_ms: 0.0264 ms
+latency_avg_ms: 232.6291 ms
+latency_mdev_ms: 239.1039 ms
+throughput_mbps: 450.3429 Mbps
+udp_bw_mbps: 0.9992 Mbps
+
+[sdnv]
+jitter_ms: 0.0180 ms
+latency_avg_ms: 174.2647 ms
+latency_mdev_ms: 149.6389 ms
+throughput_mbps: 0.9510 Mbps
+udp_bw_mbps: 1.0043 Mbps
+

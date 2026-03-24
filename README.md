@@ -217,6 +217,10 @@ The following figure visualizes the EMAPT coverage curve comparison:
 
 ![Emergency coverage curve](results/coverage_curve.png)
 
+The following figure compares key latency/jitter/throughput metrics:
+
+![Metrics comparison](results/metrics_comparison.png)
+
 ### Results Summary (Latest Run)
 
 Baseline (`baseline_5g`):
