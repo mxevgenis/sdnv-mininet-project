@@ -171,6 +171,84 @@ Measurements:
    sudo python3 experiments/auto_run.py --scenario baseline --duration 120
    ```
 
+## Experiment Walkthrough And Results
+
+This section documents the proof-of-concept experiment sequence and the
+observed outcomes for the emergency use case (5G-rate traffic).
+
+### Experiment Steps
+
+1. Start baseline run with emergency traffic at 10 Mbps:
+
+   ```sh
+   EMERGENCY_RATE=10m sudo python3 experiments/auto_run.py --scenario baseline --results-tag baseline_5g
+   ```
+
+2. Run SDNV with tuned shaping parameters:
+
+   ```sh
+   EMERGENCY_RATE=10m SDNV_HP_RATE=15mbit SDNV_HP_CEIL=40mbit \
+   SDNV_BE_RATE=10mbit SDNV_BE_CEIL=40mbit \
+   sudo python3 experiments/auto_run.py --scenario sdnv --results-tag sdnv_5g_tuned2
+   ```
+
+3. Compute EMAPT and coverage curves (awareness propagation):
+
+   ```sh
+   sudo python3 experiments/emapt_run.py --scenario baseline --results-tag emapt_baseline_5g
+   sudo python3 experiments/emapt_run.py --scenario sdnv --results-tag emapt_sdnv_tuned2
+   ```
+
+4. Inspect tables and plots:
+
+   - IEEE tables:
+     - `results/ieee_table_5g.tex`
+     - `results/ieee_table_5g_emapt.tex`
+   - EMAPT tables:
+     - `results/ieee_table_emapt.tex`
+   - Coverage curves:
+     - `results/coverage_curve_baseline.csv`
+     - `results/coverage_curve_sdnv.csv`
+     - `results/coverage_curve.png`
+
+### Figures
+
+The following figure visualizes the EMAPT coverage curve comparison:
+
+![Emergency coverage curve](results/coverage_curve.png)
+
+### Results Summary (Latest Run)
+
+Baseline (`baseline_5g`):
+1. Latency avg: 0.105 ms
+2. Latency mdev: 0.033 ms
+3. Jitter: 0.018 ms
+4. Emergency UDP: 10.0 Mbps
+5. Background TCP: 763.0 Mbps
+
+SDNV tuned (`sdnv_5g_tuned2`):
+1. Latency avg: 0.166 ms
+2. Latency mdev: 0.231 ms
+3. Jitter: 4.613 ms
+4. Emergency UDP: 9.13 Mbps
+5. Background TCP: 18.7 Mbps
+
+EMAPT (awareness propagation):
+1. Baseline EMAPT-50/90/100: 0.002225 / 0.002303 / 0.003752 s
+2. SDNV EMAPT-50/90/100: 0.001324 / 0.001332 / 0.003094 s
+
+### Explanation And Reasoning
+
+1. Emergency awareness spreads faster with SDNV. The EMAPT values are lower
+   in SDNV, meaning a higher percentage of vehicles receive the alert sooner.
+   This aligns with the goal of prioritizing emergency messages.
+2. SDNV suppresses non-critical traffic. Background TCP throughput drops
+   by ~97.5%, freeing capacity for emergency delivery.
+3. There is a latency/jitter tradeoff. Shaping improves coverage timing
+   but can increase jitter and delay variability under congestion.
+4. The local policy reaction time is under 100 ms (see
+   `logs/policy_timing_sdnv_5g_tuned2_*.log`), so enforcement is fast.
+
 ## Notes and Tips
 
 1. This testbed is intentionally minimal. Extend it by adding more stations,
