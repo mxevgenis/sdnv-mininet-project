@@ -1,0 +1,6 @@
+metric,value,unit
+traffic_suppression_efficiency,0.9754914809960681,ratio
+traffic_suppression_efficiency_percent,97.54914809960681,percent
+policy_reaction_time_s,0.087108,s
+priority_enforcement_ratio_baseline,0.01310615989515072,ratio
+priority_enforcement_ratio_sdnv,0.4882352941176471,ratio

@@ -1,0 +1,7 @@
+baseline_tag: baseline_5g
+sdnv_tag: sdnv_5g_tuned2
+traffic_suppression_efficiency: 0.9755
+traffic_suppression_efficiency_percent: 97.55%
+policy_reaction_time_s: 0.0871 s
+priority_enforcement_ratio_baseline: 0.0131
+priority_enforcement_ratio_sdnv: 0.4882
