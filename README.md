@@ -241,6 +241,12 @@ EMAPT (awareness propagation):
 1. Baseline EMAPT-50/90/100: 0.002225 / 0.002303 / 0.003752 s
 2. SDNV EMAPT-50/90/100: 0.001324 / 0.001332 / 0.003094 s
 
+Derived metrics:
+1. Traffic suppression efficiency: 97.55%
+2. Policy reaction time: 0.0871 s
+3. Priority enforcement ratio (baseline): 0.0131
+4. Priority enforcement ratio (SDNV): 0.4882
+
 ### Explanation And Reasoning
 
 1. Emergency awareness spreads faster with SDNV. The EMAPT values are lower
