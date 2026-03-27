@@ -238,8 +238,8 @@ SDNV tuned (`sdnv_5g_tuned2`):
 5. Background TCP: 18.7 Mbps
 
 EMAPT (awareness propagation):
-1. Baseline EMAPT-50/90/100: 0.002225 / 0.002303 / 0.003752 s
-2. SDNV EMAPT-50/90/100: 0.001324 / 0.001332 / 0.003094 s
+1. Baseline EMAPT-50/90/100: 2.225 / 2.303 / 3.752 ms
+2. SDNV EMAPT-50/90/100: 1.324 / 1.332 / 3.094 ms
 
 Derived metrics:
 1. Traffic suppression efficiency: 97.55%

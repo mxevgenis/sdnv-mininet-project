@@ -34,7 +34,7 @@ def main():
     for path in rx_logs:
         t = parse_time(path, 'first_rx_epoch')
         if t is not None:
-            times.append(t - t0)
+            times.append((t - t0) * 1000.0)
 
     times.sort()
     n = len(times)
@@ -51,12 +51,12 @@ def main():
     emapt_100 = times[-1]
 
     with open(args.out, 'w') as f:
-        f.write(f"emapt_50={emapt_50:.6f}\n")
-        f.write(f"emapt_90={emapt_90:.6f}\n")
-        f.write(f"emapt_100={emapt_100:.6f}\n")
-        f.write("coverage_curve_seconds,coverage_fraction\n")
+        f.write(f"emapt_50_ms={emapt_50:.3f}\n")
+        f.write(f"emapt_90_ms={emapt_90:.3f}\n")
+        f.write(f"emapt_100_ms={emapt_100:.3f}\n")
+        f.write("coverage_curve_ms,coverage_fraction\n")
         for i, t in enumerate(times, start=1):
-            f.write(f"{t:.6f},{i/n:.3f}\n")
+            f.write(f"{t:.3f},{i/n:.3f}\n")
 
     print(f"Wrote {args.out}")
 
