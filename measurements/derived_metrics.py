@@ -30,6 +30,19 @@ def _latest(paths):
     return max(paths, key=ts) if paths else None
 
 
+def _latest_with_jitter(paths):
+    def ts(p):
+        m = re.search(r'_(\d+)\.log$', os.path.basename(p))
+        return int(m.group(1)) if m else 0
+    for path in sorted(paths, key=ts, reverse=True):
+        res = _parse_iperf_udp(path)
+        if res:
+            bw, jitter = res
+            if jitter is not None:
+                return path
+    return _latest(paths)
+
+
 def _parse_latency(path):
     with open(path, 'r', encoding='utf-8', errors='ignore') as f:
         for line in f:
@@ -77,7 +90,7 @@ def load_tag_metrics(results_dir, tag):
         raise FileNotFoundError(f"results directory not found: {base}")
 
     latency = _latest(glob.glob(os.path.join(base, 'latency_*.log')))
-    jitter = _latest(glob.glob(os.path.join(base, 'jitter_*.log')))
+    jitter = _latest_with_jitter(glob.glob(os.path.join(base, 'jitter_*.log')))
     throughput = _latest(glob.glob(os.path.join(base, 'throughput_*.log')))
 
     out = {}
