@@ -44,6 +44,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--scenario', choices=['baseline', 'sdnv'], default='sdnv')
     parser.add_argument('--results-tag', default='emapt')
+    parser.add_argument('--num-vehicles', type=int, default=None,
+                        help='Number of vehicle stations (default from SDNV_NUM_VEHICLES)')
+    parser.add_argument('--area-size', type=float, default=None,
+                        help='Area size (square) in the topology coordinate system')
+    parser.add_argument('--speed-kmh', type=float, default=None,
+                        help='Fix sta1 mobility speed in km/h (optional)')
     parser.add_argument('--ryu-ip', default='127.0.0.1')
     parser.add_argument('--ryu-port', type=int, default=6653)
     args = parser.parse_args()
@@ -60,12 +66,17 @@ def main():
     info('*** building topology\n')
     os.environ['RYU_IP'] = args.ryu_ip
     os.environ['RYU_PORT'] = str(args.ryu_port)
+    if args.num_vehicles is not None:
+        os.environ['SDNV_NUM_VEHICLES'] = str(args.num_vehicles)
+    if args.area_size is not None:
+        os.environ['SDNV_AREA_SIZE'] = str(args.area_size)
+    if args.speed_kmh is not None:
+        os.environ['SDNV_SPEED_KMH'] = str(args.speed_kmh)
     net = sdnv_topology.build_network()
 
     sta1 = net.get('sta1')
-    sta2 = net.get('sta2')
-    sta3 = net.get('sta3')
-    sta4 = net.get('sta4')
+    stations = sorted(net.stations, key=lambda s: s.name)
+    recv_stations = [s for s in stations if s.name != 'sta1']
 
     def popen_in_node(node, cmd, log_path=None):
         if log_path:
@@ -89,9 +100,9 @@ def main():
 
         base = f"logs/emapt_{tag}_{timestamp}"
 
-        # start receivers on sta2-4
+        # start receivers on all stations except sta1
         rx_logs = []
-        for sta in (sta2, sta3, sta4):
+        for sta in recv_stations:
             log_path = f"{base}_rx_{sta.name}.log"
             cmd = f"python3 measurements/emapt_receiver.py --port 6000 --log {log_path}"
             proc, logf = popen_in_node(sta, cmd)
@@ -101,8 +112,9 @@ def main():
 
         # send broadcast from sta1
         tx_log = f"{base}_tx.log"
+        dests = ",".join([sta.IP() for sta in recv_stations])
         cmd = ("python3 measurements/emapt_sender.py "
-               "--dests 10.0.0.2,10.0.0.3,10.0.0.4 "
+               f"--dests {dests} "
                f"--port 6000 --log {tx_log}")
         proc, logf = popen_in_node(sta1, cmd)
         proc.wait()
@@ -122,6 +134,34 @@ def main():
             f"python3 measurements/emapt_analyze.py --logs {base} --out {out_path}"
         )
         subprocess.check_call(analyze_cmd, shell=True)
+
+        # write/refresh coverage curve CSV for plotting
+        if args.scenario in ('baseline', 'sdnv'):
+            try:
+                with open(out_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = [ln.strip() for ln in f.readlines()]
+                header_idx = None
+                for i, line in enumerate(lines):
+                    if line.startswith('coverage_curve_'):
+                        header_idx = i
+                        break
+                if header_idx is not None:
+                    header = lines[header_idx]
+                    if header.startswith('coverage_curve_ms'):
+                        out_header = 'time_ms,coverage'
+                    elif header.startswith('coverage_curve_seconds'):
+                        out_header = 'time_s,coverage'
+                    else:
+                        out_header = 'time_ms,coverage'
+                    coverage_out = f"results/coverage_curve_{args.scenario}.csv"
+                    with open(coverage_out, 'w') as f:
+                        f.write(out_header + "\n")
+                        for line in lines[header_idx + 1:]:
+                            if not line:
+                                continue
+                            f.write(line + "\n")
+            except Exception:
+                pass
 
     finally:
         info('*** stopping network\n')

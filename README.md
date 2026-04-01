@@ -135,6 +135,11 @@ Topology and mobility:
 1. Station/AP positions and mobility path: `topology/sdnv_topology.py`
 2. Number of stations/APs or their SSIDs and channels: `topology/sdnv_topology.py`
 3. Mobility timing (start/stop and duration): `topology/sdnv_topology.py`
+4. Dynamic scaling via flags or env:
+   - `--num-vehicles` or `SDNV_NUM_VEHICLES`
+   - `--area-size` or `SDNV_AREA_SIZE`
+   - `--speed-kmh` or `SDNV_SPEED_KMH`
+   - `SDNV_WIFI_MODE` (AP PHY mode)
 
 Controller behavior:
 1. Emergency traffic match and priority: `controller/sdnv_controller.py`
@@ -169,6 +174,14 @@ Measurements:
 
    ```sh
    sudo python3 experiments/auto_run.py --scenario baseline --duration 120
+   ```
+
+3. Scalability sweep (vehicles 5..20, step 4):
+
+   ```sh
+   sudo -E bash experiments/scale_run.sh
+   python3 measurements/scale_analysis.py
+   python3 measurements/plot_scale.py
    ```
 
 ## Experiment Walkthrough And Results
@@ -258,6 +271,50 @@ Derived metrics:
    but can increase jitter and delay variability under congestion.
 4. The local policy reaction time is under 100 ms (see
    `logs/policy_timing_sdnv_5g_tuned2_*.log`), so enforcement is fast.
+
+## Scalability Evaluation
+
+We evaluate scalability by sweeping the number of vehicles from 5 to 20
+(step 4), expanding the area to 1000x1000, and fixing mobility speed at
+60 km/h. For this sweep we use symmetric shaping (HP 15/40 Mbit, BE 15/40
+Mbit) to study how performance trends as the network grows.
+
+Scalability metrics:
+1. Emergency delivery stability: UDP throughput (target 10 Mbps) across
+   vehicle counts.
+2. Non-critical suppression: background TCP throughput and the derived
+   suppression ratio.
+3. Dissemination efficiency: EMAPT-50/90/100 (ms) as the network scales.
+4. Control responsiveness: policy reaction time (ms) per vehicle count.
+
+How we run it:
+1. Run the sweep:
+   ```sh
+   sudo -E bash experiments/scale_run.sh
+   ```
+2. Aggregate and plot:
+   ```sh
+   python3 measurements/scale_analysis.py
+   python3 measurements/plot_scale.py
+   python3 measurements/plot_emapt_heatmap.py
+   python3 measurements/plot_emapt_surface.py
+   ```
+3. Inspect outputs:
+   - Summary: `results/scale_summary.csv`
+   - IEEE table: `results/ieee_table_scalability.tex`
+   - Plots: `results/scale_metrics.png`, `results/scale_emapt.png`,
+     `results/scale_emapt_heatmap.png`, `results/scale_emapt_surface.png`
+
+Main findings (scalability):
+1. Emergency UDP remains stable near 10 Mbps across all counts, indicating
+   the SDNV policy preserves critical traffic under growth.
+2. Background TCP is sharply reduced under SDNV (about 12–14 Mbps) while
+   baseline remains much higher (roughly 188–625 Mbps), yielding suppression
+   ratios above 93%.
+3. EMAPT values increase with scale, reflecting higher contention, but SDNV
+   maintains comparable or faster awareness propagation across most counts.
+4. Policy reaction time remains in the sub-200 ms range, showing that
+   vehicle-side enforcement remains responsive as the network grows.
 
 ## Notes and Tips
 

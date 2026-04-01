@@ -15,6 +15,7 @@ Mobility: sta1 moves from (20,30) to (90,30) between 10s and 40s
 """
 
 import argparse
+import math
 import os
 
 from mininet.log import setLogLevel, info
@@ -25,27 +26,101 @@ from mn_wifi.node import OVSKernelAP, Station
 from mininet.link import TCLink
 
 
-def build_network():
+def _env_int(key, default):
+    val = os.environ.get(key)
+    if val is None or val == '':
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
+
+def _env_float(key, default):
+    val = os.environ.get(key)
+    if val is None or val == '':
+        return default
+    try:
+        return float(val)
+    except ValueError:
+        return default
+
+
+def _grid_positions(count, center, spacing, area_size):
+    if count <= 0:
+        return []
+    cols = int(math.ceil(math.sqrt(count)))
+    rows = int(math.ceil(count / cols))
+    start_x = center[0] - (cols - 1) * spacing / 2.0
+    start_y = center[1] - (rows - 1) * spacing / 2.0
+    positions = []
+    for idx in range(count):
+        r = idx // cols
+        c = idx % cols
+        x = start_x + c * spacing
+        y = start_y + r * spacing
+        x = min(max(0.0, x), area_size)
+        y = min(max(0.0, y), area_size)
+        positions.append((x, y))
+    return positions
+
+
+def build_network(num_vehicles=None, area_size=None, wifi_mode=None,
+                  speed_kmh=None, mobility_start=None, mobility_stop=None):
     net = Mininet_wifi(controller=None, accessPoint=OVSKernelAP,
                        switch=OVSKernelSwitch)
+
+    # Defaults preserve the original 4-station, 100x100 setup.
+    area_size = area_size or _env_float('SDNV_AREA_SIZE', 100.0)
+    num_vehicles = num_vehicles or _env_int('SDNV_NUM_VEHICLES', 4)
+    wifi_mode = wifi_mode or os.environ.get('SDNV_WIFI_MODE', 'g')
+    speed_kmh = speed_kmh if speed_kmh is not None else _env_float('SDNV_SPEED_KMH', None)
+    mobility_start = mobility_start if mobility_start is not None else _env_float('SDNV_MOBILITY_START', 10.0)
+    mobility_stop = mobility_stop if mobility_stop is not None else _env_float('SDNV_MOBILITY_STOP', None)
+
+    num_vehicles = max(1, int(num_vehicles))
+
+    range_scale = area_size / 100.0
+    sta_range = _env_float('SDNV_STA_RANGE', 50.0 * range_scale)
+    ap_range = _env_float('SDNV_AP_RANGE', 50.0 * range_scale)
+    spacing = _env_float('SDNV_STA_SPACING', 5.0 * range_scale)
 
     info('*** Adding controller\n')
     ryu_ip = os.environ.get('RYU_IP', '127.0.0.1')
     ryu_port = int(os.environ.get('RYU_PORT', '6653'))
-    c0 = net.addController('c0', controller=RemoteController,
+    class NoCheckRemoteController(RemoteController):
+        def checkListening(self):
+            return
+
+    c0 = net.addController('c0', controller=NoCheckRemoteController,
                            ip=ryu_ip, port=ryu_port)
 
     info('*** Adding stations\n')
-    sta1 = net.addStation('sta1', ip='10.0.0.1/8', position='20,30,0', range=50)
-    sta2 = net.addStation('sta2', ip='10.0.0.2/8', position='25,35,0', range=50)
-    sta3 = net.addStation('sta3', ip='10.0.0.3/8', position='25,25,0', range=50)
-    sta4 = net.addStation('sta4', ip='10.0.0.4/8', position='35,30,0', range=50)
+    ap1_center = (0.30 * area_size, 0.30 * area_size)
+    ap2_center = (0.80 * area_size, 0.30 * area_size)
+    sta1_start = (0.20 * area_size, 0.30 * area_size)
+    sta1_stop = (0.90 * area_size, 0.30 * area_size)
+
+    sta1 = net.addStation('sta1', ip='10.0.0.1/8',
+                          position=f"{sta1_start[0]:.3f},{sta1_start[1]:.3f},0",
+                          range=sta_range)
+
+    extra_positions = _grid_positions(num_vehicles - 1, ap1_center, spacing, area_size)
+    for idx, (x, y) in enumerate(extra_positions, start=2):
+        net.addStation(
+            f"sta{idx}",
+            ip=f"10.0.0.{idx}/8",
+            position=f"{x:.3f},{y:.3f},0",
+            range=sta_range,
+        )
 
     info('*** Adding access points\n')
-    ap1 = net.addAccessPoint('ap1', ssid='rsuA', mode='g', channel='1',
-                             position='30,30,0', protocols='OpenFlow13', range=50)
-    ap2 = net.addAccessPoint('ap2', ssid='rsuB', mode='g', channel='6',
-                             position='80,30,0', protocols='OpenFlow13', range=50)
+    ap1 = net.addAccessPoint('ap1', ssid='rsuA', mode=wifi_mode, channel='1',
+                             position=f"{ap1_center[0]:.3f},{ap1_center[1]:.3f},0",
+                             protocols='OpenFlow13', range=ap_range)
+    ap2 = net.addAccessPoint('ap2', ssid='rsuB', mode=wifi_mode, channel='6',
+                             position=f"{ap2_center[0]:.3f},{ap2_center[1]:.3f},0",
+                             protocols='OpenFlow13', range=ap_range)
 
     info('*** Adding switch and host\n')
     s1 = net.addSwitch('s1', protocols='OpenFlow13')
@@ -55,10 +130,9 @@ def build_network():
     net.configureNodes()
 
     info('*** Associating stations\n')
-    net.addLink(sta1, ap1)
-    net.addLink(sta2, ap1)
-    net.addLink(sta3, ap1)
-    net.addLink(sta4, ap1)
+    stations = sorted(net.stations, key=lambda s: s.name)
+    for sta in stations:
+        net.addLink(sta, ap1)
 
     info('*** Creating wired links\n')
     net.addLink(ap1, s1, cls=TCLink)
@@ -71,10 +145,22 @@ def build_network():
 
     info('*** Setting mobility\n')
     net.startMobility(time=0)
-    # sta1 moves from 20->90 between 10s and 40s on x-axis
-    net.mobility(sta1, 'start', time=10, position='20,30,0')
-    net.mobility(sta1, 'stop', time=40, position='90,30,0')
-    net.stopMobility(time=50)
+    # sta1 moves across the x-axis; speed can be fixed via SDNV_SPEED_KMH.
+    if mobility_stop is None:
+        if speed_kmh:
+            speed_mps = (speed_kmh * 1000.0) / 3600.0
+            distance = math.hypot(sta1_stop[0] - sta1_start[0],
+                                  sta1_stop[1] - sta1_start[1])
+            duration = distance / speed_mps if speed_mps > 0 else 30.0
+            mobility_stop = mobility_start + duration
+        else:
+            mobility_stop = 40.0
+
+    net.mobility(sta1, 'start', time=mobility_start,
+                 position=f"{sta1_start[0]:.3f},{sta1_start[1]:.3f},0")
+    net.mobility(sta1, 'stop', time=mobility_stop,
+                 position=f"{sta1_stop[0]:.3f},{sta1_stop[1]:.3f},0")
+    net.stopMobility(time=mobility_stop + 10.0)
 
     return net
 
@@ -82,7 +168,8 @@ def build_network():
 def run_cli(net, cli_script=None):
     info('*** Running CLI\n')
     if os.environ.get('DISPLAY'):
-        net.plotGraph(max_x=100, max_y=100)
+        max_area = _env_float('SDNV_AREA_SIZE', 100.0)
+        net.plotGraph(max_x=max_area, max_y=max_area)
         net.startTerms()
     else:
         info('*** DISPLAY not set; skipping plotGraph/startTerms\n')

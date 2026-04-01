@@ -51,6 +51,12 @@ def main():
                         help='Optional tag for results/logs (defaults to scenario)')
     parser.add_argument('--duration', type=int, default=60,
                         help='iperf duration in seconds for traffic flows')
+    parser.add_argument('--num-vehicles', type=int, default=None,
+                        help='Number of vehicle stations (default from SDNV_NUM_VEHICLES)')
+    parser.add_argument('--area-size', type=float, default=None,
+                        help='Area size (square) in the topology coordinate system')
+    parser.add_argument('--speed-kmh', type=float, default=None,
+                        help='Fix sta1 mobility speed in km/h (optional)')
     parser.add_argument('--ryu-ip', default='127.0.0.1')
     parser.add_argument('--ryu-port', type=int, default=6653)
     args = parser.parse_args()
@@ -68,13 +74,18 @@ def main():
     info('*** building topology\n')
     os.environ['RYU_IP'] = args.ryu_ip
     os.environ['RYU_PORT'] = str(args.ryu_port)
+    if args.num_vehicles is not None:
+        os.environ['SDNV_NUM_VEHICLES'] = str(args.num_vehicles)
+    if args.area_size is not None:
+        os.environ['SDNV_AREA_SIZE'] = str(args.area_size)
+    if args.speed_kmh is not None:
+        os.environ['SDNV_SPEED_KMH'] = str(args.speed_kmh)
     net = sdnv_topology.build_network()
 
     sta1 = net.get('sta1')
-    sta2 = net.get('sta2')
-    sta3 = net.get('sta3')
-    sta4 = net.get('sta4')
     h1 = net.get('h1')
+    stations = sorted(net.stations, key=lambda s: s.name)
+    other_stations = [s for s in stations if s.name != 'sta1']
 
     def popen_in_node(node, cmd, log_path=None):
         if log_path:
@@ -129,8 +140,8 @@ def main():
             proc, logf = popen_in_node(sta1, 'bash vehicle/baseline_policy.sh')
             proc.wait()
 
-        info('*** starting congestion flows (sta2-4 -> h1)\n')
-        for sta in (sta2, sta3, sta4):
+        info('*** starting congestion flows (all stations except sta1 -> h1)\n')
+        for sta in other_stations:
             popen_in_node(
                 sta,
                 f"iperf -c 10.0.0.100 -p 5002 -t {args.duration} -i 5",
