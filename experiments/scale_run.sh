@@ -4,8 +4,15 @@ set -euo pipefail
 # Scale experiments across vehicle counts.
 # Defaults target the scalability scenario: 1000x1000 area, 60 km/h.
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+if [ -f "${SCRIPT_DIR}/params_scale.env" ]; then
+  set -a
+  . "${SCRIPT_DIR}/params_scale.env"
+  set +a
+fi
+
 START=${SDNV_START:-5}
-STEP=${SDNV_STEP:-4}
+STEP=${SDNV_STEP:-5}
 END=${SDNV_END:-20}
 AREA=${SDNV_AREA_SIZE:-1000}
 SPEED=${SDNV_SPEED_KMH:-60}

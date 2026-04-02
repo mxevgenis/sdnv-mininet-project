@@ -191,25 +191,30 @@ observed outcomes for the emergency use case (5G-rate traffic).
 
 ### Experiment Steps
 
-1. Start baseline run with emergency traffic at 10 Mbps:
+We standardize experiment parameters using two environment files:
+1. `experiments/params_base.env` for the base emergency scenario (speed 60 km/h).
+2. `experiments/params_scale.env` for the scalability sweep (vehicles 5, 10, 15, 20).
+
+1. Load the base parameters and start the baseline run:
 
    ```sh
-   EMERGENCY_RATE=10m sudo python3 experiments/auto_run.py --scenario baseline --results-tag baseline_5g
+   set -a
+   . experiments/params_base.env
+   set +a
+   sudo -E python3 experiments/auto_run.py --scenario baseline --results-tag baseline_5g --speed-kmh ${SDNV_SPEED_KMH}
    ```
 
-2. Run SDNV with tuned shaping parameters:
+2. Run SDNV with the recommended shaping parameters:
 
    ```sh
-   EMERGENCY_RATE=10m SDNV_HP_RATE=15mbit SDNV_HP_CEIL=40mbit \
-   SDNV_BE_RATE=10mbit SDNV_BE_CEIL=40mbit \
-   sudo python3 experiments/auto_run.py --scenario sdnv --results-tag sdnv_5g_tuned2
+   sudo -E python3 experiments/auto_run.py --scenario sdnv --results-tag sdnv_5g --speed-kmh ${SDNV_SPEED_KMH}
    ```
 
 3. Compute EMAPT and coverage curves (awareness propagation):
 
    ```sh
-   sudo python3 experiments/emapt_run.py --scenario baseline --results-tag emapt_baseline_5g
-   sudo python3 experiments/emapt_run.py --scenario sdnv --results-tag emapt_sdnv_tuned2
+   sudo -E python3 experiments/emapt_run.py --scenario baseline --results-tag emapt_baseline_5g --speed-kmh ${SDNV_SPEED_KMH}
+   sudo -E python3 experiments/emapt_run.py --scenario sdnv --results-tag emapt_sdnv_5g --speed-kmh ${SDNV_SPEED_KMH}
    ```
 
 4. Inspect tables and plots:
@@ -234,48 +239,61 @@ The following figure compares key latency/jitter/throughput metrics:
 
 ![Metrics comparison](results/metrics_comparison.png)
 
-### Results Summary (Latest Run)
+### Results Summary (5-Run Average, BE 15/40)
 
-Baseline (`baseline_5g`):
-1. Latency avg: 0.105 ms
-2. Latency mdev: 0.033 ms
-3. Jitter: 0.018 ms
-4. Emergency UDP: 10.0 Mbps
-5. Background TCP: 763.0 Mbps
+To further evaluate the effectiveness of the SDNV paradigm, we analyze system
+performance under a high load emergency scenario (EMERGENCY_RATE = 10 Mbps)
+and extend the evaluation to include dissemination efficiency and
+prioritization metrics. The numbers below are the mean of five independent
+runs with symmetric shaping for SDNV (HP 15/40 Mbit, BE 15/40 Mbit).
 
-SDNV tuned (`sdnv_5g_tuned2`):
-1. Latency avg: 0.166 ms
-2. Latency mdev: 0.231 ms
-3. Jitter: 4.613 ms
-4. Emergency UDP: 9.13 Mbps
-5. Background TCP: 18.7 Mbps
+Baseline (mean over 5 runs, `baseline_5g_be1540_r1..r5`):
+1. Latency avg: 138.728 ms
+2. Latency mdev: 136.311 ms
+3. Jitter: 0.074 ms
+4. Emergency UDP: 10.000 Mbps
+5. Background TCP: 533.580 Mbps
 
-EMAPT (awareness propagation):
-1. Baseline EMAPT-50/90/100: 2.225 / 2.303 / 3.752 ms
-2. SDNV EMAPT-50/90/100: 1.324 / 1.332 / 3.094 ms
+SDNV (mean over 5 runs, `sdnv_5g_be1540_r1..r5`):
+1. Latency avg: 233.387 ms
+2. Latency mdev: 179.066 ms
+3. Jitter: 0.035 ms
+4. Emergency UDP: 9.988 Mbps
+5. Background TCP: 13.820 Mbps
 
-Derived metrics:
-1. Traffic suppression efficiency: 97.55%
-2. Policy reaction time: 0.0871 s
-3. Priority enforcement ratio (baseline): 0.0131
-4. Priority enforcement ratio (SDNV): 0.4882
+EMAPT (awareness propagation, mean over 5 runs):
+1. Baseline EMAPT-50/90/100: 2.364 / 2.609 / 3.303 ms
+2. SDNV EMAPT-50/90/100: 3.635 / 6.199 / 11.146 ms
+
+Derived metrics (mean over 5 runs):
+1. Traffic suppression efficiency: 81.74%
+2. Policy reaction time: 122.118 ms
+3. Priority enforcement ratio (baseline): 0.1306
+4. Priority enforcement ratio (SDNV): 0.7233
 
 ### Explanation And Reasoning
 
-1. Emergency awareness spreads faster with SDNV. The EMAPT values are lower
-   in SDNV, meaning a higher percentage of vehicles receive the alert sooner.
-   This aligns with the goal of prioritizing emergency messages.
-2. SDNV suppresses non-critical traffic. Background TCP throughput drops
-   by ~97.5%, freeing capacity for emergency delivery.
-3. There is a latency/jitter tradeoff. Shaping improves coverage timing
-   but can increase jitter and delay variability under congestion.
-4. The local policy reaction time is under 100 ms (see
-   `logs/policy_timing_sdnv_5g_tuned2_*.log`), so enforcement is fast.
+1. SDNV preserves emergency throughput while suppressing background traffic.
+   Emergency UDP remains at ~10 Mbps, while background TCP drops from
+   ~533.6 Mbps to ~13.8 Mbps, yielding ~81.7% suppression.
+2. Prioritization is substantially stronger in SDNV. The priority enforcement
+   ratio increases from ~0.13 (baseline) to ~0.72 (SDNV), indicating far
+   better separation between critical and non-critical flows.
+3. Control responsiveness remains fast. The measured policy reaction time is
+   ~122 ms, which keeps enforcement within sub-200 ms timescales.
+4. EMAPT is slower under SDNV in this configuration. The EMAPT packets are sent
+   on UDP port 6000, which does not match the high-priority classifier
+   (UDP/5001). As a result, EMAPT traffic is shaped as best-effort and can be
+   delayed by queueing. If EMAPT must be accelerated, align the port with the
+   emergency classifier or add a dedicated high-priority rule.
+5. Latency and jitter tradeoffs shift with shaping. SDNV reduces jitter but
+   increases mean latency and mdev, reflecting the stricter queueing applied
+   to best-effort traffic under congestion.
 
 ## Scalability Evaluation
 
 We evaluate scalability by sweeping the number of vehicles from 5 to 20
-(step 4), expanding the area to 1000x1000, and fixing mobility speed at
+(step 5), expanding the area to 1000x1000, and fixing mobility speed at
 60 km/h. For this sweep we use symmetric shaping (HP 15/40 Mbit, BE 15/40
 Mbit) to study how performance trends as the network grows.
 
@@ -290,6 +308,9 @@ Scalability metrics:
 How we run it:
 1. Run the sweep:
    ```sh
+   set -a
+   . experiments/params_scale.env
+   set +a
    sudo -E bash experiments/scale_run.sh
    ```
 2. Aggregate and plot:

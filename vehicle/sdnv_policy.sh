@@ -23,10 +23,10 @@ sudo tc qdisc add dev $intf root handle 1: htb default 20
 
 # create classes: 10 for high-priority, 20 for best-effort
 # rates/ceilings can be overridden via environment variables
-hp_rate=${SDNV_HP_RATE:-10mbit}
-hp_ceil=${SDNV_HP_CEIL:-20mbit}
-be_rate=${SDNV_BE_RATE:-20mbit}
-be_ceil=${SDNV_BE_CEIL:-80mbit}
+hp_rate=${SDNV_HP_RATE:-15mbit}
+hp_ceil=${SDNV_HP_CEIL:-40mbit}
+be_rate=${SDNV_BE_RATE:-15mbit}
+be_ceil=${SDNV_BE_CEIL:-40mbit}
 
 sudo tc class add dev $intf parent 1: classid 1:10 htb rate $hp_rate ceil $hp_ceil
 sudo tc class add dev $intf parent 1: classid 1:20 htb rate $be_rate ceil $be_ceil

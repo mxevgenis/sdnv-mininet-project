@@ -1,0 +1,25 @@
+Baseline (mean over runs)
+latency_avg_ms: 138.7276 ms
+latency_mdev_ms: 136.3114 ms
+jitter_ms: 0.0736 ms
+udp_bw_mbps: 10.0000 mbps
+throughput_mbps: 533.5800 mbps
+emapt_50_ms: 2.3642 ms
+emapt_90_ms: 2.6088 ms
+emapt_100_ms: 3.3032 ms
+
+SDNV (mean over runs)
+latency_avg_ms: 233.3868 ms
+latency_mdev_ms: 179.0664 ms
+jitter_ms: 0.0350 ms
+udp_bw_mbps: 9.9880 mbps
+throughput_mbps: 13.8200 mbps
+emapt_50_ms: 3.6354 ms
+emapt_90_ms: 6.1988 ms
+emapt_100_ms: 11.1460 ms
+
+Derived (mean over runs)
+traffic_suppression_eff: 0.8174
+priority_ratio_baseline: 0.1306
+priority_ratio_sdnv: 0.7233
+policy_reaction_ms: 122.1176 ms
