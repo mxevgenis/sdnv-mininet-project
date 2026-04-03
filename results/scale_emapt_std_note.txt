@@ -1,0 +1,2 @@
+EMAPT was not collected in the multi-run sweep (RUN_EMAPT=0).
+Re-run scale_run_multi.sh with RUN_EMAPT=1 if you want EMAPT mean/std.

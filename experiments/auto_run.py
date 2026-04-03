@@ -51,6 +51,8 @@ def main():
                         help='Optional tag for results/logs (defaults to scenario)')
     parser.add_argument('--duration', type=int, default=60,
                         help='iperf duration in seconds for traffic flows')
+    parser.add_argument('--warmup', type=float, default=None,
+                        help='Warm-up seconds before measurements (default SDNV_WARMUP or 0)')
     parser.add_argument('--num-vehicles', type=int, default=None,
                         help='Number of vehicle stations (default from SDNV_NUM_VEHICLES)')
     parser.add_argument('--area-size', type=float, default=None,
@@ -65,6 +67,12 @@ def main():
     os.makedirs('logs', exist_ok=True)
     os.makedirs(f"results/{results_tag}", exist_ok=True)
     timestamp = int(time.time())
+    warmup = args.warmup
+    if warmup is None:
+        try:
+            warmup = float(os.environ.get('SDNV_WARMUP', '0') or 0)
+        except ValueError:
+            warmup = 0.0
 
     info('*** starting controller\n')
     ctrl_log = f"logs/controller_{results_tag}_{timestamp}.log"
@@ -147,6 +155,10 @@ def main():
                 f"iperf -c 10.0.0.100 -p 5002 -t {args.duration} -i 5",
                 f"logs/{sta.name}_congestion_{results_tag}_{timestamp}.log",
             )
+
+        if warmup and warmup > 0:
+            info(f'*** warm-up for {warmup:.1f}s before measurements\n')
+            time.sleep(warmup)
 
         info('*** measuring latency, jitter, and throughput from sta1\n')
         for cmd, log_name in (
