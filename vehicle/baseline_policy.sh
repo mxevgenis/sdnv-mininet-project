@@ -15,8 +15,20 @@ if [ -z "$intf" ]; then
 fi
 
 # remove any existing qdiscs
-sudo tc qdisc del dev $intf root 2>/dev/null || true
+sudo tc qdisc del dev "$intf" root 2>/dev/null || true
 
-# nothing else to configure
+flat_shaping=${BASELINE_FLAT_SHAPING:-0}
+total_rate=${SDNV_TOTAL_RATE:-40mbit}
+total_ceil=${SDNV_TOTAL_CEIL:-$total_rate}
+use_fq_codel=${SDNV_USE_FQ_CODEL:-0}
 
-echo "[baseline_policy] no traffic control applied."
+if [ "$flat_shaping" = "1" ]; then
+    sudo tc qdisc add dev "$intf" root handle 1: htb default 10
+    sudo tc class add dev "$intf" parent 1: classid 1:10 htb rate "$total_rate" ceil "$total_ceil"
+    if [ "$use_fq_codel" = "1" ]; then
+        sudo tc qdisc add dev "$intf" parent 1:10 handle 110: fq_codel
+    fi
+    echo "[baseline_policy] flat shaping enabled at $total_rate/$total_ceil."
+else
+    echo "[baseline_policy] no traffic control applied."
+fi

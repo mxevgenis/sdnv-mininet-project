@@ -19,25 +19,49 @@ fi
 sudo tc qdisc del dev $intf root 2>/dev/null || true
 
 # add root HTB qdisc
-sudo tc qdisc add dev $intf root handle 1: htb default 20
+sudo tc qdisc add dev "$intf" root handle 1: htb default 20
 
 # create classes: 10 for high-priority, 20 for best-effort
 # rates/ceilings can be overridden via environment variables
+total_rate=${SDNV_TOTAL_RATE:-}
+total_ceil=${SDNV_TOTAL_CEIL:-$total_rate}
 hp_rate=${SDNV_HP_RATE:-15mbit}
 hp_ceil=${SDNV_HP_CEIL:-40mbit}
 be_rate=${SDNV_BE_RATE:-15mbit}
 be_ceil=${SDNV_BE_CEIL:-40mbit}
+priority_ports=${SDNV_PRIORITY_PORTS:-5001}
+use_fq_codel=${SDNV_USE_FQ_CODEL:-0}
+parent_class=1:
 
-sudo tc class add dev $intf parent 1: classid 1:10 htb rate $hp_rate ceil $hp_ceil
-sudo tc class add dev $intf parent 1: classid 1:20 htb rate $be_rate ceil $be_ceil
+if [ -n "$total_rate" ]; then
+    sudo tc class add dev "$intf" parent 1: classid 1:1 htb rate "$total_rate" ceil "${total_ceil:-$total_rate}"
+    parent_class=1:1
+fi
+
+sudo tc class add dev "$intf" parent "$parent_class" classid 1:10 htb rate "$hp_rate" ceil "$hp_ceil"
+sudo tc class add dev "$intf" parent "$parent_class" classid 1:20 htb rate "$be_rate" ceil "$be_ceil"
+
+if [ "$use_fq_codel" = "1" ]; then
+    sudo tc qdisc add dev "$intf" parent 1:10 handle 110: fq_codel
+    sudo tc qdisc add dev "$intf" parent 1:20 handle 120: fq_codel
+fi
 
 # add filter for emergency UDP
-sudo tc filter add dev $intf protocol ip parent 1:0 prio 1 u32 \
-    match ip protocol 17 0xff \
-    match ip dport 5001 0xffff \
-    flowid 1:10
+IFS=',' read -r -a ports <<< "$priority_ports"
+for port in "${ports[@]}"; do
+    port=$(echo "$port" | xargs)
+    if [ -z "$port" ]; then
+        continue
+    fi
+    sudo tc filter add dev "$intf" protocol ip parent 1:0 prio 1 u32 \
+        match ip protocol 17 0xff \
+        match ip dport "$port" 0xffff \
+        flowid 1:10
+done
 
 # best-effort (all other traffic) uses default class
 
 echo "[sdnv_policy] HTB qdisc configured with priority for UDP/5001."
+echo "[sdnv_policy] Total rate/ceil: ${total_rate:-unlimited}/${total_ceil:-unlimited}"
 echo "[sdnv_policy] HP rate/ceil: $hp_rate/$hp_ceil, BE rate/ceil: $be_rate/$be_ceil"
+echo "[sdnv_policy] Priority ports: $priority_ports"

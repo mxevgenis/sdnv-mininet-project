@@ -87,6 +87,10 @@ def main():
                         help='Baseline tag prefix (expects suffix: <count>_r<run>)')
     parser.add_argument('--sdnv-prefix', default='sdnv_scale_v',
                         help='SDNV tag prefix (expects suffix: <count>_r<run>)')
+    parser.add_argument('--emapt-baseline-prefix', default='emapt_baseline_scale_v',
+                        help='EMAPT baseline tag prefix (expects suffix: <count>_r<run>)')
+    parser.add_argument('--emapt-sdnv-prefix', default='emapt_sdnv_scale_v',
+                        help='EMAPT SDNV tag prefix (expects suffix: <count>_r<run>)')
     parser.add_argument('--out-runs', default='results/scale_runs_multi.csv',
                         help='Per-run metrics output CSV')
     parser.add_argument('--out-summary', default='results/scale_summary_multi.csv',
@@ -124,8 +128,12 @@ def main():
                 sdnv_runs[key].append(s_val)
 
             # EMAPT per-run (optional)
-            b_emapt = parse_emapt(latest_emapt_csv(f"emapt_baseline_scale_v{n}_r{r}"))
-            s_emapt = parse_emapt(latest_emapt_csv(f"emapt_sdnv_scale_v{n}_r{r}"))
+            b_emapt = parse_emapt(
+                latest_emapt_csv(f"{args.emapt_baseline_prefix}{n}_r{r}")
+            )
+            s_emapt = parse_emapt(
+                latest_emapt_csv(f"{args.emapt_sdnv_prefix}{n}_r{r}")
+            )
             for k in EMAPT_KEYS:
                 b_val = b_emapt.get(k)
                 s_val = s_emapt.get(k)

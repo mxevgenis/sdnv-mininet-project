@@ -1,4 +1,6 @@
 # ryu controller for SDNV experiments
+import os
+
 from ryu.base import app_manager
 from ryu.controller import ofp_event
 from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER
@@ -17,6 +19,10 @@ class SDNVController(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(SDNVController, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
+        ports = os.environ.get('SDNV_PRIORITY_PORTS', '5001')
+        self.priority_ports = {
+            int(port.strip()) for port in ports.split(',') if port.strip().isdigit()
+        }
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -76,14 +82,19 @@ class SDNVController(app_manager.RyuApp):
         # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = in_port
 
-        # priority rule: UDP dst port 5001 (emergency) -> high priority
+        # priority rule: selected UDP source/destination ports -> high priority
         if pkt.get_protocol(udp.udp):
             udp_proto = pkt.get_protocol(udp.udp)
-            if udp_proto.dst_port == 5001:
-                # install high-priority flow
+            if udp_proto.dst_port in self.priority_ports:
                 match = parser.OFPMatch(eth_type=0x0800,
                                         ip_proto=17,
-                                        udp_dst=5001)
+                                        udp_dst=udp_proto.dst_port)
+                actions = [parser.OFPActionOutput(ofproto.OFPP_NORMAL)]
+                self.add_flow(datapath, 100, match, actions)
+            if udp_proto.src_port in self.priority_ports:
+                match = parser.OFPMatch(eth_type=0x0800,
+                                        ip_proto=17,
+                                        udp_src=udp_proto.src_port)
                 actions = [parser.OFPActionOutput(ofproto.OFPP_NORMAL)]
                 self.add_flow(datapath, 100, match, actions)
 

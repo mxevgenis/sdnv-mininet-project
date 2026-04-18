@@ -10,6 +10,9 @@ import re
 PING_RE = re.compile(r"= ([0-9.]+)/([0-9.]+)/([0-9.]+)/([0-9.]+)")
 IPERF_BW_RE = re.compile(r"([0-9.]+)\s+([KMG]bits/sec)")
 IPERF_JITTER_RE = re.compile(r"([0-9.]+)\s+ms")
+IPERF_SERVER_UDP_RE = re.compile(
+    r"\[\s*\d+\]\s+([0-9.]+)-([0-9.]+)\s+sec.*?([0-9.]+)\s+([KMG]bits/sec)\s+([0-9.]+)\s+ms"
+)
 
 
 def _to_mbps(value, unit):
@@ -84,7 +87,27 @@ def _parse_iperf_udp(path):
     return last_bw, last_jitter
 
 
-def load_tag_metrics(results_dir, tag):
+def _parse_iperf_udp_server(path):
+    best = None
+    with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            m = IPERF_SERVER_UDP_RE.search(line)
+            if not m:
+                continue
+            start = float(m.group(1))
+            end = float(m.group(2))
+            duration = end - start
+            bw = _to_mbps(m.group(3), m.group(4))
+            jitter = float(m.group(5))
+            if best is None or duration > best[0]:
+                best = (duration, bw, jitter)
+    if best is None:
+        return None
+    _duration, bw, jitter = best
+    return bw, jitter
+
+
+def load_tag_metrics(results_dir, tag, logs_dir='logs'):
     base = os.path.join(results_dir, tag)
     if not os.path.isdir(base):
         raise FileNotFoundError(f"results directory not found: {base}")
@@ -102,6 +125,19 @@ def load_tag_metrics(results_dir, tag):
         res = _parse_iperf_udp(jitter)
         if res:
             out['udp_bw_mbps'], out['jitter_ms'] = res
+
+    # Fall back to the UDP server log when the client-side iperf output does not
+    # include the final server report (which is where jitter is reported).
+    if logs_dir and ('jitter_ms' not in out or out.get('jitter_ms') is None):
+        server_log = _latest(
+            glob.glob(os.path.join(logs_dir, f'iperf_udp_server_{tag}_*.log'))
+        )
+        if server_log:
+            res = _parse_iperf_udp_server(server_log)
+            if res:
+                bw, jitter_val = res
+                out.setdefault('udp_bw_mbps', bw)
+                out['jitter_ms'] = jitter_val
     if throughput:
         res = _parse_iperf_tcp(throughput)
         if res is not None:

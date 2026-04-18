@@ -46,6 +46,13 @@ def _env_float(key, default):
         return default
 
 
+def _env_bool(key, default=False):
+    val = os.environ.get(key)
+    if val is None or val == '':
+        return default
+    return str(val).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 def _grid_positions(count, center, spacing, area_size):
     if count <= 0:
         return []
@@ -62,6 +69,21 @@ def _grid_positions(count, center, spacing, area_size):
         x = min(max(0.0, x), area_size)
         y = min(max(0.0, y), area_size)
         positions.append((x, y))
+    return positions
+
+
+def _positions_around_centers(count, centers, spacing, area_size):
+    if not centers:
+        return []
+    if len(centers) == 1:
+        return _grid_positions(count, centers[0], spacing, area_size)
+
+    positions = []
+    base = count // len(centers)
+    remainder = count % len(centers)
+    for idx, center in enumerate(centers):
+        local_count = base + (1 if idx < remainder else 0)
+        positions.extend(_grid_positions(local_count, center, spacing, area_size))
     return positions
 
 
@@ -84,6 +106,8 @@ def build_network(num_vehicles=None, area_size=None, wifi_mode=None,
     sta_range = _env_float('SDNV_STA_RANGE', 50.0 * range_scale)
     ap_range = _env_float('SDNV_AP_RANGE', 50.0 * range_scale)
     spacing = _env_float('SDNV_STA_SPACING', 5.0 * range_scale)
+    use_both_aps = _env_bool('SDNV_USE_BOTH_APS', False)
+    auto_association = _env_bool('SDNV_AUTO_ASSOCIATION', False)
 
     info('*** Adding controller\n')
     ryu_ip = os.environ.get('RYU_IP', '127.0.0.1')
@@ -100,13 +124,16 @@ def build_network(num_vehicles=None, area_size=None, wifi_mode=None,
     ap2_center = (0.80 * area_size, 0.30 * area_size)
     sta1_start = (0.20 * area_size, 0.30 * area_size)
     sta1_stop = (0.90 * area_size, 0.30 * area_size)
+    station_positions = {'sta1': sta1_start}
 
     sta1 = net.addStation('sta1', ip='10.0.0.1/8',
                           position=f"{sta1_start[0]:.3f},{sta1_start[1]:.3f},0",
                           range=sta_range)
 
-    extra_positions = _grid_positions(num_vehicles - 1, ap1_center, spacing, area_size)
+    extra_centers = [ap1_center, ap2_center] if use_both_aps else [ap1_center]
+    extra_positions = _positions_around_centers(num_vehicles - 1, extra_centers, spacing, area_size)
     for idx, (x, y) in enumerate(extra_positions, start=2):
+        station_positions[f"sta{idx}"] = (x, y)
         net.addStation(
             f"sta{idx}",
             ip=f"10.0.0.{idx}/8",
@@ -131,8 +158,17 @@ def build_network(num_vehicles=None, area_size=None, wifi_mode=None,
 
     info('*** Associating stations\n')
     stations = sorted(net.stations, key=lambda s: s.name)
-    for sta in stations:
-        net.addLink(sta, ap1)
+    if auto_association:
+        info('*** auto association enabled; Mininet-WiFi will associate stations to the strongest AP\n')
+    else:
+        for sta in stations:
+            ap_target = ap1
+            if use_both_aps:
+                x, y = station_positions.get(sta.name, ap1_center)
+                dist_ap1 = math.hypot(x - ap1_center[0], y - ap1_center[1])
+                dist_ap2 = math.hypot(x - ap2_center[0], y - ap2_center[1])
+                ap_target = ap1 if dist_ap1 <= dist_ap2 else ap2
+            net.addLink(sta, ap_target)
 
     info('*** Creating wired links\n')
     net.addLink(ap1, s1, cls=TCLink)
