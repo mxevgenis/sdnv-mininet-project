@@ -55,6 +55,28 @@ def collect_summary(rows, key):
     return data
 
 
+def collect_sdnv_only_runs(rows, key):
+    data = {}
+    for r in rows:
+        v = int(float(r['vehicles']))
+        data.setdefault(v, [])
+        val = to_float(r.get(f"{key}_sdnv"))
+        if val is not None:
+            data[v].append(val)
+    return data
+
+
+def collect_sdnv_only_summary(rows, key):
+    data = {}
+    for r in rows:
+        v = int(float(r['vehicles']))
+        data[v] = {
+            'sdnv_mean': to_float(r.get(f"{key}_sdnv_mean")),
+            'sdnv_std': to_float(r.get(f"{key}_sdnv_std")),
+        }
+    return data
+
+
 def _fit_line(xs, ys):
     xs = [x for x, y in zip(xs, ys) if y is not None]
     ys = [y for y in ys if y is not None]
@@ -125,6 +147,44 @@ def plot_metric(runs_rows, summary_rows, key, title, y_label, out_path):
     plt.close()
 
 
+def plot_sdnv_only_metric(runs_rows, summary_rows, key, title, y_label, out_path):
+    runs = collect_sdnv_only_runs(runs_rows, key)
+    summary = collect_sdnv_only_summary(summary_rows, key)
+
+    vehicles = sorted(runs.keys())
+    if not vehicles:
+        return
+
+    random.seed(7)
+    plt.figure(figsize=(6.4, 3.8))
+
+    for v in vehicles:
+        jitter = [(v + random.uniform(-0.08, 0.08)) for _ in runs[v]]
+        plt.scatter(jitter, runs[v], color='#dc2626', alpha=0.7, s=18)
+
+    means = [summary[v]['sdnv_mean'] for v in vehicles]
+    stds = [summary[v]['sdnv_std'] for v in vehicles]
+
+    plt.errorbar(vehicles, means, yerr=stds, color='#dc2626', marker='o',
+                 linestyle='None', capsize=3, label='SDNV')
+
+    fit = _fit_line(vehicles, means)
+    if fit:
+        m, c = fit
+        xs = [min(vehicles), max(vehicles)]
+        ys = [m * x + c for x in xs]
+        plt.plot(xs, ys, color='#fca5a5', linewidth=1.2)
+
+    plt.title(title.upper())
+    plt.xlabel('VEHICLES')
+    plt.ylabel(y_label.upper())
+    plt.grid(True, alpha=0.25)
+    plt.legend(loc='upper center', ncol=1, frameon=False)
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description='Plot scale metrics with stddev')
     parser.add_argument('--runs', default='results/scale_runs_multi.csv')
@@ -140,21 +200,21 @@ def main():
 
     os.makedirs(args.outdir, exist_ok=True)
 
-    plot_metric(runs_rows, summary_rows, 'latency_avg_ms',
-                'Latency', 'Time (ms)',
-                os.path.join(args.outdir, 'latency_vs_vehicles.png'))
+    plot_metric(runs_rows, summary_rows, 'emergency_latency_avg_ms',
+                'Emergency Latency', 'Time (ms)',
+                os.path.join(args.outdir, 'emergency_latency_vs_vehicles.png'))
 
-    plot_metric(runs_rows, summary_rows, 'jitter_ms',
-                'Jitter', 'Time (ms)',
-                os.path.join(args.outdir, 'jitter_vs_vehicles.png'))
+    plot_metric(runs_rows, summary_rows, 'background_latency_avg_ms',
+                'Background Latency', 'Time (ms)',
+                os.path.join(args.outdir, 'background_latency_vs_vehicles.png'))
 
     plot_metric(runs_rows, summary_rows, 'udp_bw_mbps',
                 'Emergency UDP Throughput', 'Throughput (Mbps)',
-                os.path.join(args.outdir, 'udp_vs_vehicles.png'))
+                os.path.join(args.outdir, 'emergency_throughput_vs_vehicles.png'))
 
     plot_metric(runs_rows, summary_rows, 'throughput_mbps',
                 'Background TCP Throughput', 'Throughput (Mbps)',
-                os.path.join(args.outdir, 'tcp_vs_vehicles.png'))
+                os.path.join(args.outdir, 'background_throughput_vs_vehicles.png'))
 
     # Optional EMAPT plots if present in summary
     if any('emapt_50_ms_baseline_mean' in r for r in summary_rows):
@@ -167,6 +227,26 @@ def main():
         plot_metric(runs_rows, summary_rows, 'emapt_100_ms',
                     'EMAPT-100', 'Time (ms)',
                     os.path.join(args.outdir, 'emapt100_vs_vehicles.png'))
+
+    if any('policy_reaction_ms_sdnv_mean' in r for r in summary_rows):
+        plot_sdnv_only_metric(
+            runs_rows,
+            summary_rows,
+            'policy_reaction_ms',
+            'Policy Reaction Time',
+            'Time (ms)',
+            os.path.join(args.outdir, 'policy_reaction_time_sdnv_vs_vehicles.png'),
+        )
+
+    if any('priority_enforcement_ratio_sdnv_mean' in r for r in summary_rows):
+        plot_sdnv_only_metric(
+            runs_rows,
+            summary_rows,
+            'priority_enforcement_ratio',
+            'Priority Enforcement Ratio',
+            'Ratio',
+            os.path.join(args.outdir, 'priority_enforcement_ratio_sdnv_vs_vehicles.png'),
+        )
 
     print(f"Wrote plots to {args.outdir}")
 

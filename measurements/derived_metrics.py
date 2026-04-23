@@ -112,15 +112,28 @@ def load_tag_metrics(results_dir, tag, logs_dir='logs'):
     if not os.path.isdir(base):
         raise FileNotFoundError(f"results directory not found: {base}")
 
-    latency = _latest(glob.glob(os.path.join(base, 'latency_*.log')))
+    emergency_latency = _latest(glob.glob(os.path.join(base, 'emergency_latency_*.log')))
+    if not emergency_latency:
+        emergency_latency = _latest(glob.glob(os.path.join(base, 'latency_*.log')))
+    background_latency = _latest(glob.glob(os.path.join(base, 'background_latency_*.log')))
     jitter = _latest_with_jitter(glob.glob(os.path.join(base, 'jitter_*.log')))
     throughput = _latest(glob.glob(os.path.join(base, 'throughput_*.log')))
 
     out = {}
-    if latency:
-        res = _parse_latency(latency)
+    if emergency_latency:
+        res = _parse_latency(emergency_latency)
         if res:
-            out['latency_avg_ms'], out['latency_mdev_ms'] = res
+            avg_ms, mdev_ms = res
+            out['latency_avg_ms'] = avg_ms
+            out['latency_mdev_ms'] = mdev_ms
+            out['emergency_latency_avg_ms'] = avg_ms
+            out['emergency_latency_mdev_ms'] = mdev_ms
+    if background_latency:
+        res = _parse_latency(background_latency)
+        if res:
+            avg_ms, mdev_ms = res
+            out['background_latency_avg_ms'] = avg_ms
+            out['background_latency_mdev_ms'] = mdev_ms
     if jitter:
         res = _parse_iperf_udp(jitter)
         if res:

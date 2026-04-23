@@ -10,17 +10,21 @@ import statistics
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from measurements.derived_metrics import load_tag_metrics
+from measurements.derived_metrics import load_policy_reaction, load_tag_metrics
 
 
 METRICS = [
-    ('latency_avg_ms', 'ms'),
-    ('jitter_ms', 'ms'),
+    ('emergency_latency_avg_ms', 'ms'),
+    ('background_latency_avg_ms', 'ms'),
     ('udp_bw_mbps', 'mbps'),
     ('throughput_mbps', 'mbps'),
 ]
 
 EMAPT_KEYS = ['emapt_50_ms', 'emapt_90_ms', 'emapt_100_ms']
+SDNV_ONLY_KEYS = [
+    ('policy_reaction_ms', 'ms'),
+    ('priority_enforcement_ratio', 'ratio'),
+]
 
 
 def latest_emapt_csv(tag_prefix):
@@ -106,6 +110,7 @@ def main():
         sdnv_runs = {k: [] for k, _ in METRICS}
         baseline_emapt = {k: [] for k in EMAPT_KEYS}
         sdnv_emapt = {k: [] for k in EMAPT_KEYS}
+        sdnv_only_runs = {k: [] for k, _ in SDNV_ONLY_KEYS}
 
         for r in range(1, args.runs + 1):
             b_tag = f"{args.baseline_prefix}{n}_r{r}"
@@ -126,6 +131,18 @@ def main():
                 row[f"{key}_sdnv"] = s_val
                 baseline_runs[key].append(b_val)
                 sdnv_runs[key].append(s_val)
+
+            prt_s = load_policy_reaction('logs', s_tag)
+            prt_ms = (prt_s * 1000.0) if prt_s is not None else None
+            per = None
+            s_udp = s.get('udp_bw_mbps')
+            s_bg = s.get('throughput_mbps')
+            if s_udp is not None and s_bg not in (None, 0):
+                per = s_udp / s_bg
+            row['policy_reaction_ms_sdnv'] = prt_ms
+            row['priority_enforcement_ratio_sdnv'] = per
+            sdnv_only_runs['policy_reaction_ms'].append(prt_ms)
+            sdnv_only_runs['priority_enforcement_ratio'].append(per)
 
             # EMAPT per-run (optional)
             b_emapt = parse_emapt(
@@ -161,6 +178,11 @@ def main():
             summary[f"{k}_baseline_std"] = b_std
             summary[f"{k}_sdnv_mean"] = s_mean
             summary[f"{k}_sdnv_std"] = s_std
+        for key, unit in SDNV_ONLY_KEYS:
+            s_mean, s_std = mean_std(sdnv_only_runs[key])
+            summary[f"{key}_sdnv_mean"] = s_mean
+            summary[f"{key}_sdnv_std"] = s_std
+            summary[f"{key}_unit"] = unit
         summary_rows.append(summary)
 
     os.makedirs(os.path.dirname(args.out_runs) or '.', exist_ok=True)

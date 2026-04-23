@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 Fair v2 SDNV experiment runner.
-Measures emergency UDP, emergency-class latency, and local best-effort TCP
-concurrently under the same fixed background load.
+Measures emergency UDP throughput, emergency UDP latency, background TCP
+latency, and local best-effort TCP throughput concurrently under the same
+fixed background load.
 """
 
 import argparse
@@ -90,6 +91,7 @@ def main():
     emergency_port = int(os.environ.get('SDNV_EMERGENCY_PORT', '5001'))
     best_effort_port = int(os.environ.get('SDNV_BEST_EFFORT_PORT', '5002'))
     latency_port = int(os.environ.get('SDNV_LATENCY_PORT', '5003'))
+    background_latency_port = int(os.environ.get('SDNV_BACKGROUND_LATENCY_PORT', '5004'))
 
     info('*** starting controller\n')
     ctrl_log = f'logs/controller_{results_tag}_{timestamp}.log'
@@ -125,6 +127,7 @@ def main():
             (f'iperf -s -u -p {emergency_port}', 'iperf_udp_server'),
             (f'iperf -s -p {best_effort_port}', 'iperf_tcp_server'),
             (f'python3 measurements/udp_echo_server.py --port {latency_port}', 'udp_echo_server'),
+            (f'python3 measurements/tcp_echo_server.py --port {background_latency_port}', 'tcp_echo_server'),
         ):
             proc, logf = _popen_in_node(h1, cmd, f'logs/{name}_{results_tag}_{timestamp}.log')
             server_processes.append((proc, logf))
@@ -179,7 +182,7 @@ def main():
             info(f'*** warm-up for {warmup:.1f}s before concurrent measurements\n')
             time.sleep(warmup)
 
-        info('*** starting concurrent emergency, latency, and best-effort measurements from sta1\n')
+        info('*** starting concurrent emergency/background latency and throughput measurements from sta1\n')
         result_dir = f'results/{results_tag}'
         run_processes = []
         commands = (
@@ -187,8 +190,15 @@ def main():
                 f'python3 measurements/udp_latency_client.py '
                 f'--dest 10.0.0.100 --port {latency_port} '
                 f'--duration {args.duration} --interval {latency_interval} '
-                f'--log {result_dir}/latency_{timestamp}.log',
-                f'logs/latency_run_{results_tag}_{timestamp}.log',
+                f'--log {result_dir}/emergency_latency_{timestamp}.log',
+                f'logs/emergency_latency_run_{results_tag}_{timestamp}.log',
+            ),
+            (
+                f'python3 measurements/tcp_latency_client.py '
+                f'--dest 10.0.0.100 --port {background_latency_port} '
+                f'--duration {args.duration} --interval {latency_interval} '
+                f'--log {result_dir}/background_latency_{timestamp}.log',
+                f'logs/background_latency_run_{results_tag}_{timestamp}.log',
             ),
             (
                 f'iperf -u -c 10.0.0.100 -p {emergency_port} -b {os.environ.get("EMERGENCY_RATE", "10m")} '
