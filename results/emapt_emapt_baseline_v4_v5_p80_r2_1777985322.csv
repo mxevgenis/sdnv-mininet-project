@@ -1,0 +1,7 @@
+emapt_50_ms=0.921
+emapt_90_ms=1.693
+emapt_100_ms=1.786
+coverage_curve_ms,coverage_fraction
+0.921,0.333
+1.693,0.667
+1.786,1.000
