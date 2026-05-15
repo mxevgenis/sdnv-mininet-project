@@ -1,0 +1,37 @@
+\begin{algorithm}[t]
+\caption{V6 Cooperative Emergency Scalability Experiment}
+\label{alg:v6-coop-scale}
+\begin{algorithmic}[1]
+\REQUIRE Vehicle counts $C=\{5,10,15,20\}$, repetitions $R=5$, warm-up $T_w=10$ s, measurement interval $T_m=60$ s
+\REQUIRE Emergency vehicle $v_e=\mathrm{sta1}$, helper set $H=V\setminus\{v_e\}$
+\REQUIRE Primary emergency UDP rate $r_e=10$ Mbit/s, aggregate helper UDP rate $r_{u}=10$ Mbit/s
+\REQUIRE Aggregate helper TCP offered load $r_{t}=80$ Mbit/s, SDNV helper TCP cap $r_{t}^{\max}=10$ Mbit/s
+\FOR{each vehicle count $c \in C$}
+    \STATE Deploy a $1000\times1000$ m Mininet-WiFi topology with $c$ vehicles moving at $60$ km/h
+    \STATE Assign $\mathrm{sta1}$ as the emergency vehicle and all remaining vehicles as helpers
+    \FOR{each repetition $r=1$ to $R$}
+        \FOR{each scenario $s \in \{\mathrm{baseline},\mathrm{sdnv}\}$}
+            \STATE Start the SDN controller and instantiate the topology
+            \STATE Apply common pre-trigger shaping and start helper/local background TCP traffic
+            \STATE Wait for the warm-up interval $T_w$
+            \STATE Trigger the emergency communication mode (ECM)
+            \IF{$s=\mathrm{baseline}$}
+                \STATE Keep flat helper-side policies while emergency UDP, helper UDP, and helper TCP coexist
+            \ELSE
+                \STATE Prioritize emergency UDP at the emergency vehicle
+                \STATE Prioritize cooperative helper UDP at helper vehicles
+                \STATE Throttle the aggregate helper TCP traffic to $r_{t}^{\max}$
+            \ENDIF
+            \STATE Measure emergency UDP latency and background TCP latency during $T_m$
+            \STATE Measure primary emergency UDP throughput, helper UDP throughput, and background TCP throughput during $T_m$
+            \STATE Compute UDP share, traffic suppression efficiency (TSE), and priority enforcement ratio (PER)
+            \STATE Record the policy reaction time (PRT) for the SDNV case
+            \STATE Execute emergency dissemination and compute EMAPT-50, EMAPT-90, and EMAPT-100
+            \STATE Stop the topology and store logs and per-run outputs
+        \ENDFOR
+    \ENDFOR
+\ENDFOR
+\STATE Aggregate all repetitions and report mean and standard deviation for every metric
+\STATE Generate latency, throughput, and EMAPT figures as functions of the number of vehicles
+\end{algorithmic}
+\end{algorithm}
