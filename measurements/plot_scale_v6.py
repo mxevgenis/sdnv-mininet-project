@@ -45,6 +45,27 @@ def _run_points(run_rows, key, scenario):
     return grouped
 
 
+def _summary_points(summary_rows, key):
+    xs = []
+    means = []
+    stds = []
+    for row in summary_rows:
+        xs.append(int(float(row['vehicle_count'])))
+        means.append(to_float(row.get(f'{key}_mean')))
+        stds.append(to_float(row.get(f'{key}_std')))
+    return xs, means, stds
+
+
+def _run_points_single(run_rows, key):
+    grouped = defaultdict(list)
+    for row in run_rows:
+        x = int(float(row['vehicle_count']))
+        value = to_float(row.get(key))
+        if value is not None:
+            grouped[x].append(value)
+    return grouped
+
+
 def _plot_four_lines(summary_rows, run_rows, specs, title, ylabel, out_path):
     plt.figure(figsize=(7.2, 4.2))
     for key, scenario, label, color, linestyle in specs:
@@ -114,6 +135,45 @@ def _plot_two_lines(summary_rows, run_rows, key, title, ylabel, out_path):
             markersize=5,
             label=f'{scenario.upper()} mean',
         )
+    plt.title(title)
+    plt.xlabel('Vehicles')
+    plt.ylabel(ylabel)
+    plt.ylim(bottom=0)
+    plt.grid(True, alpha=0.25)
+    plt.legend(frameon=False)
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
+def _plot_single_series(summary_rows, run_rows, key, title, ylabel, out_path, color='#dc2626', label='SDNV mean'):
+    plt.figure(figsize=(7.2, 4.2))
+    xs, means, _stds = _summary_points(summary_rows, key)
+    grouped = _run_points_single(run_rows, key)
+    scatter_x = []
+    scatter_y = []
+    for x in xs:
+        values = grouped.get(x, [])
+        scatter_x.extend([x] * len(values))
+        scatter_y.extend(values)
+    plt.scatter(
+        scatter_x,
+        scatter_y,
+        color=color,
+        s=22,
+        alpha=0.85,
+        edgecolors='none',
+    )
+    plt.plot(
+        xs,
+        means,
+        color=color,
+        linestyle='-',
+        marker='o',
+        linewidth=1.5,
+        markersize=5,
+        label=label,
+    )
     plt.title(title)
     plt.xlabel('Vehicles')
     plt.ylabel(ylabel)
@@ -225,6 +285,38 @@ def main():
         'EMAPT-100 vs Vehicles',
         'Time (ms)',
         os.path.join(args.outdir, 'emapt100_vs_vehicles.png'),
+    )
+    _plot_two_lines(
+        summary_rows,
+        run_rows,
+        'udp_share_pct',
+        'UDP Share vs Vehicles',
+        'UDP Share (%)',
+        os.path.join(args.outdir, 'udp_share_vs_vehicles.png'),
+    )
+    _plot_two_lines(
+        summary_rows,
+        run_rows,
+        'priority_enforcement_ratio',
+        'PER vs Vehicles',
+        'Priority Enforcement Ratio',
+        os.path.join(args.outdir, 'per_vs_vehicles.png'),
+    )
+    _plot_single_series(
+        summary_rows,
+        run_rows,
+        'traffic_suppression_efficiency_pct_sdnv',
+        'TSE vs Vehicles',
+        'Traffic Suppression Efficiency (%)',
+        os.path.join(args.outdir, 'tse_vs_vehicles.png'),
+    )
+    _plot_single_series(
+        summary_rows,
+        run_rows,
+        'policy_reaction_ms_sdnv',
+        'PRT vs Vehicles',
+        'Policy Reaction Time (ms)',
+        os.path.join(args.outdir, 'prt_vs_vehicles.png'),
     )
     print(f'Wrote plots to {args.outdir}')
 
