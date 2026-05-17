@@ -87,8 +87,8 @@ def _parse_iperf_bw(path):
     return _to_mbps(m.group(1), m.group(2))
 
 
-def _latest_emapt_csv(tag_prefix):
-    matches = glob.glob(os.path.join('results', f'emapt_{tag_prefix}_*.csv'))
+def _latest_emapt_csv(results_dir, tag_prefix):
+    matches = glob.glob(os.path.join(results_dir, f'emapt_{tag_prefix}_*.csv'))
     return _latest(matches)
 
 
@@ -194,6 +194,8 @@ def main():
     parser.add_argument('--sdnv-prefix', default='sdnv_v6_scale_v')
     parser.add_argument('--emapt-baseline-prefix', default='emapt_baseline_v6_scale_v')
     parser.add_argument('--emapt-sdnv-prefix', default='emapt_sdnv_v6_scale_v')
+    parser.add_argument('--results-dir', default='results')
+    parser.add_argument('--logs-dir', default='logs')
     parser.add_argument('--out-runs', default='results/scale_runs_v6.csv')
     parser.add_argument('--out-summary', default='results/scale_summary_v6.csv')
     parser.add_argument('--out-table', default='results/scale_table_v6.csv')
@@ -219,8 +221,8 @@ def main():
             b_tag = f'{args.baseline_prefix}{tag_suffix}'
             s_tag = f'{args.sdnv_prefix}{tag_suffix}'
 
-            b = load_tag_metrics('results', b_tag)
-            s = load_tag_metrics('results', s_tag)
+            b = load_tag_metrics(args.results_dir, b_tag)
+            s = load_tag_metrics(args.results_dir, s_tag)
             row = {'vehicle_count': vehicles, 'run': run}
 
             for key, _unit in METRICS:
@@ -248,16 +250,16 @@ def main():
             row['traffic_suppression_efficiency_pct_sdnv'] = tse
             tse_runs.append(tse)
 
-            prt = load_policy_reaction('logs', s_tag)
+            prt = load_policy_reaction(args.logs_dir, s_tag)
             prt_ms = (prt * 1000.0) if prt is not None else None
             row['policy_reaction_ms_sdnv'] = prt_ms
             prt_runs.append(prt_ms)
 
             b_emapt = _parse_emapt(
-                _latest_emapt_csv(f'{args.emapt_baseline_prefix}{tag_suffix}')
+                _latest_emapt_csv(args.results_dir, f'{args.emapt_baseline_prefix}{tag_suffix}')
             )
             s_emapt = _parse_emapt(
-                _latest_emapt_csv(f'{args.emapt_sdnv_prefix}{tag_suffix}')
+                _latest_emapt_csv(args.results_dir, f'{args.emapt_sdnv_prefix}{tag_suffix}')
             )
             for key in EMAPT_KEYS:
                 b_val = b_emapt.get(key)
